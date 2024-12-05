@@ -246,6 +246,12 @@ def analyze_face(image_path):
             }
         }
 
+
+@app.route('/status', methods=['GET'])
+def check_status():
+    """Health check endpoint"""
+    return jsonify({"status": "Backend is running!"}), 200
+
 @app.route('/analyze', methods=['POST'])
 def upload_image():
     if 'file' not in request.files:
