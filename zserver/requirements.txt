@@ -3,4 +3,4 @@ Flask-Cors
 opencv-python
 mediapipe
 numpy
-colorsys
+
