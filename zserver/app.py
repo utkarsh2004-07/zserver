@@ -69,57 +69,150 @@ def rgb_to_eyebrow_color(r, g, b):
     else:
         return "Gray"
 
+
+
+
+
 def determine_face_shape(landmarks, image_shape):
     """
-    Determine face shape based on facial measurements and proportions
+    Determine face shape based on comprehensive facial measurements and proportions.
+    
+    Args:
+        landmarks: MediaPipe face mesh landmarks
+        image_shape: Tuple of image dimensions (height, width)
+        
+    Returns:
+        str: Predicted face shape
+        float: Confidence score (0-1)
     """
-    h, w = image_shape[:2]
-    
-    # Extract key measurements
-    # Face width at different points
-    forehead_width = abs(landmarks.landmark[251].x - landmarks.landmark[21].x) * w
-    cheekbone_width = abs(landmarks.landmark[234].x - landmarks.landmark[454].x) * w
-    jawline_width = abs(landmarks.landmark[172].x - landmarks.landmark[397].x) * w
-    
-    # Face length measurements
-    face_length = abs(landmarks.landmark[10].y - landmarks.landmark[152].y) * h
-    forehead_height = abs(landmarks.landmark[10].y - landmarks.landmark[109].y) * h
-    jaw_height = abs(landmarks.landmark[152].y - landmarks.landmark[172].y) * h
-    
-    # Calculate ratios
-    width_to_length_ratio = cheekbone_width / face_length
-    forehead_to_jaw_ratio = forehead_width / jawline_width
-    cheekbone_to_jaw_ratio = cheekbone_width / jawline_width
-    forehead_height_ratio = forehead_height / face_length
-    jaw_height_ratio = jaw_height / face_length
-    
-    # Face shape classification logic
-    if width_to_length_ratio <= 0.75:
-        if forehead_to_jaw_ratio > 1.1:
-            return "Heart"
-        else:
-            return "Oblong"
+    try:
+        h, w = image_shape[:2]
+        
+        # Extract key measurements
+        # Face width measurements
+        forehead_width = abs(landmarks.landmark[251].x - landmarks.landmark[21].x) * w
+        temple_width = abs(landmarks.landmark[247].x - landmarks.landmark[447].x) * w
+        cheekbone_width = abs(landmarks.landmark[234].x - landmarks.landmark[454].x) * w
+        jawline_width = abs(landmarks.landmark[172].x - landmarks.landmark[397].x) * w
+        chin_width = abs(landmarks.landmark[148].x - landmarks.landmark[377].x) * w
+        
+        # Face length measurements
+        face_length = abs(landmarks.landmark[10].y - landmarks.landmark[152].y) * h
+        forehead_height = abs(landmarks.landmark[10].y - landmarks.landmark[109].y) * h
+        midface_height = abs(landmarks.landmark[109].y - landmarks.landmark[94].y) * h
+        lower_face_height = abs(landmarks.landmark[94].y - landmarks.landmark[152].y) * h
+        jaw_height = abs(landmarks.landmark[152].y - landmarks.landmark[172].y) * h
+        
+        # Validate measurements
+        measurements = [forehead_width, temple_width, cheekbone_width, jawline_width,
+                       chin_width, face_length, forehead_height, midface_height,
+                       lower_face_height, jaw_height]
+        
+        if any(m <= 0 for m in measurements):
+            return "Invalid measurements detected", 0.0
             
-    elif width_to_length_ratio >= 0.85:
-        if cheekbone_to_jaw_ratio > 1.1:
-            return "Round"
-        else:
-            return "Square"
+        # Calculate key ratios
+        width_to_length_ratio = cheekbone_width / face_length
+        forehead_to_jaw_ratio = forehead_width / jawline_width
+        cheekbone_to_jaw_ratio = cheekbone_width / jawline_width
+        temple_to_jaw_ratio = temple_width / jawline_width
+        chin_to_cheek_ratio = chin_width / cheekbone_width
+        
+        # Height proportions
+        forehead_ratio = forehead_height / face_length
+        midface_ratio = midface_height / face_length
+        lower_face_ratio = lower_face_height / face_length
+        
+        # Face shape classification with confidence scoring
+        confidence = 0.0
+        face_shape = "Unknown"
+        
+        # Oval face shape
+        if (0.75 <= width_to_length_ratio <= 0.85 and
+            cheekbone_to_jaw_ratio >= 1.05 and
+            forehead_to_jaw_ratio >= 0.9 and
+            forehead_to_jaw_ratio <= 1.1):
+            face_shape = "Oval"
+            confidence = min(1.0, 
+                           (1.15 - abs(width_to_length_ratio - 0.8)) +
+                           (cheekbone_to_jaw_ratio - 1.05) +
+                           (1.1 - abs(forehead_to_jaw_ratio - 1.0)))
+        
+        # Round face shape
+        elif (width_to_length_ratio >= 0.85 and
+              cheekbone_to_jaw_ratio >= 1.05 and
+              chin_to_cheek_ratio >= 0.85):
+            face_shape = "Round"
+            confidence = min(1.0,
+                           (width_to_length_ratio - 0.85) +
+                           (cheekbone_to_jaw_ratio - 1.05) +
+                           (chin_to_cheek_ratio - 0.85))
+        
+        # Heart face shape
+        elif (forehead_to_jaw_ratio >= 1.1 and
+              chin_to_cheek_ratio <= 0.75 and
+              forehead_ratio >= 0.32):
+            face_shape = "Heart"
+            confidence = min(1.0,
+                           (forehead_to_jaw_ratio - 1.1) +
+                           (0.75 - chin_to_cheek_ratio) +
+                           (forehead_ratio - 0.32))
+        
+        # Square face shape
+        elif (width_to_length_ratio >= 0.85 and
+              abs(forehead_to_jaw_ratio - 1.0) <= 0.1 and
+              abs(cheekbone_to_jaw_ratio - 1.0) <= 0.1):
+            face_shape = "Square"
+            confidence = min(1.0,
+                           (width_to_length_ratio - 0.85) +
+                           (0.1 - abs(forehead_to_jaw_ratio - 1.0)) +
+                           (0.1 - abs(cheekbone_to_jaw_ratio - 1.0)))
+        
+        # Diamond face shape
+        elif (cheekbone_to_jaw_ratio >= 1.15 and
+              forehead_to_jaw_ratio <= 0.9 and
+              temple_to_jaw_ratio <= 0.85):
+            face_shape = "Diamond"
+            confidence = min(1.0,
+                           (cheekbone_to_jaw_ratio - 1.15) +
+                           (0.9 - forehead_to_jaw_ratio) +
+                           (0.85 - temple_to_jaw_ratio))
+        
+        # Oblong face shape
+        elif (width_to_length_ratio <= 0.75 and
+              abs(forehead_to_jaw_ratio - 1.0) <= 0.1 and
+              lower_face_ratio >= 0.4):
+            face_shape = "Oblong"
+            confidence = min(1.0,
+                           (0.75 - width_to_length_ratio) +
+                           (0.1 - abs(forehead_to_jaw_ratio - 1.0)) +
+                           (lower_face_ratio - 0.4))
+        
+        # Triangle face shape
+        elif (forehead_to_jaw_ratio <= 0.9 and
+              cheekbone_to_jaw_ratio >= 1.1 and
+              chin_to_cheek_ratio >= 0.9):
+            face_shape = "Triangle"
+            confidence = min(1.0,
+                           (0.9 - forehead_to_jaw_ratio) +
+                           (cheekbone_to_jaw_ratio - 1.1) +
+                           (chin_to_cheek_ratio - 0.9))
+        
+        # If no clear match, default to closest match based on key ratios
+        if face_shape == "Unknown":
+            face_shape = "Oval"  # Most common face shape as default
+            confidence = 0.5
             
-    else:  # Medium width-to-length ratio
-        if forehead_to_jaw_ratio > 1.1 and cheekbone_to_jaw_ratio > 1.1:
-            return "Diamond"
-        elif forehead_to_jaw_ratio < 0.9 and cheekbone_to_jaw_ratio > 1.1:
-            return "Triangle"
-        elif abs(forehead_to_jaw_ratio - 1.0) < 0.1 and cheekbone_to_jaw_ratio > 1.05:
-            return "Oval"
-        elif forehead_height_ratio > 0.35:
-            if jaw_height_ratio < 0.3:
-                return "Heart"
-            else:
-                return "Rectangle"
-        else:
-            return "Oval"  # Default to oval if no other clear match
+        return face_shape, confidence
+        
+    except (AttributeError, IndexError, ZeroDivisionError) as e:
+        return "Error: Invalid landmarks", 0.0
+
+
+
+
+
+
 
 def analyze_face(image_path):
     """Comprehensive face analysis function"""
